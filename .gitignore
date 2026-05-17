@@ -1,0 +1,116 @@
+# ───────────────────────────────────────────────────────────
+# Secrets — NEVER commit these
+# ───────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# ───────────────────────────────────────────────────────────
+# Python
+# ───────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+env.bak/
+venv.bak/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+.cache/
+
+# Type checkers / linters
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.dmypy.json
+dmypy.json
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ───────────────────────────────────────────────────────────
+# Project data — large/binary/generated, don't push
+# ───────────────────────────────────────────────────────────
+data/chroma/
+data/images/
+data/logs/
+data/tables.db
+data/checkpoints.db
+data/response_log.jsonl
+data/schema_catalog.json
+data/pdfs/*.pdf
+data/pdfs/*.PDF
+
+# Keep the placeholder so the directory structure is preserved
+!data/pdfs/README.txt
+
+# ───────────────────────────────────────────────────────────
+# IDE / editor
+# ───────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# ───────────────────────────────────────────────────────────
+# OS
+# ───────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ───────────────────────────────────────────────────────────
+# Misc
+# ───────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak
+node_modules/
