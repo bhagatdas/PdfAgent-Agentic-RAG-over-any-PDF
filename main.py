@@ -63,7 +63,7 @@ Examples:
 
 
 def _run_ingest(args):
-    from ingestion.preprocessor import preprocess_all_pdfs
+    from preprocessing import preprocess_all_pdfs
 
     print("\n=== PREPROCESSING PIPELINE ===\n")
     stats = preprocess_all_pdfs(

@@ -69,7 +69,7 @@ def setup_logging(level: str = "INFO", log_dir: str = "./data/logs") -> None:
     root_logger.addHandler(file_handler)
 
     # Quiet down noisy third-party loggers
-    for noisy in ["httpx", "httpcore", "chromadb", "urllib3", "PIL"]:
+    for noisy in ["httpx", "httpcore", "faiss", "urllib3", "PIL"]:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     logging.info("Logging initialized - level=%s, log_file=%s", level, log_file)

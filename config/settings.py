@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     ollama_model_embed: str = Field(default="nomic-embed-text")
 
     # ── Storage Paths ──
-    chroma_persist_dir: str = Field(default="./data/chroma")
+    faiss_persist_dir: str = Field(default="./data/faiss")
     sqlite_table_db: str = Field(default="./data/tables.db")
     checkpoint_db: str = Field(default="./data/checkpoints.db")
     data_dir: str = Field(default="./data")
@@ -72,7 +72,7 @@ class Settings(BaseSettings):
             self.data_dir,
             self.pdf_dir,
             self.image_dir,
-            self.chroma_persist_dir,
+            self.faiss_persist_dir,
         ]:
             Path(dir_path).mkdir(parents=True, exist_ok=True)
 

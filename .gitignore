@@ -114,3 +114,6 @@ desktop.ini
 *.tmp
 *.bak
 node_modules/
+
+# Claude Code local guidance file — keep out of public repo
+CLAUDE.md

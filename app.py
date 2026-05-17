@@ -143,7 +143,7 @@ async def query_endpoint(request: QueryRequest):
 @app.post("/ingest")
 async def ingest_endpoint(request: IngestRequest):
     """Trigger PDF preprocessing pipeline."""
-    from ingestion.preprocessor import preprocess_all_pdfs
+    from preprocessing import preprocess_all_pdfs
 
     logger.info("Ingestion triggered via API")
     try:

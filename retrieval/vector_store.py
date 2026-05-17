@@ -1,25 +1,89 @@
 """
-ChromaDB vector store abstraction.
-Designed to be swappable with FAISS, Qdrant, or Weaviate.
+FAISS-backed vector store with the same API surface as the previous ChromaDB
+implementation, so callers (agents/retrieval.py, retrieval/hybrid.py,
+preprocessing.py, app.py) need no changes.
+
+Layout on disk (under settings.faiss_persist_dir):
+    index.faiss    — FAISS IndexFlatIP over L2-normalized vectors (== cosine similarity)
+    docstore.json  — sidecar with the doc records and chunk_id <-> position map
+
+Metadata filtering supports the subset of Mongo-style operators actually used
+in this codebase:
+    {"field": value}                 -> equality
+    {"field": {"$ne": v}}            -> not equal
+    {"field": {"$gte": v}}           -> >=
+    {"field": {"$lte": v}}           -> <=
+    {"field": {"$eq": v}}            -> ==
+    {"$and": [clause, clause, ...]}  -> conjunction
+Multiple top-level keys are an implicit AND.
 """
 
+from __future__ import annotations
+
+import json
 import logging
+import threading
 from pathlib import Path
 from typing import Optional
 
-import chromadb
-from chromadb.config import Settings as ChromaSettings
+import faiss
+import numpy as np
 
 from config.settings import settings
-from utils.embeddings import get_embedding_model
+from utils.embeddings import embed_texts, embed_text
 
 logger = logging.getLogger(__name__)
 
 
+# ── Tiny Mongo-style filter matcher ──────────────────────────────────────────
+
+def _match_clause(metadata: dict, field: str, condition) -> bool:
+    """Match one (field, condition) pair."""
+    value = metadata.get(field)
+    if isinstance(condition, dict):
+        for op, target in condition.items():
+            if op == "$eq" and value != target:
+                return False
+            elif op == "$ne" and value == target:
+                return False
+            elif op == "$gte" and (value is None or value < target):
+                return False
+            elif op == "$lte" and (value is None or value > target):
+                return False
+            elif op == "$gt" and (value is None or value <= target):
+                return False
+            elif op == "$lt" and (value is None or value >= target):
+                return False
+            elif op == "$in" and value not in target:
+                return False
+            elif op == "$nin" and value in target:
+                return False
+        return True
+    return value == condition
+
+
+def _matches(metadata: dict, where: Optional[dict]) -> bool:
+    if not where:
+        return True
+    for key, condition in where.items():
+        if key == "$and":
+            if not all(_matches(metadata, sub) for sub in condition):
+                return False
+        elif key == "$or":
+            if not any(_matches(metadata, sub) for sub in condition):
+                return False
+        else:
+            if not _match_clause(metadata, key, condition):
+                return False
+    return True
+
+
+# ── Vector store ─────────────────────────────────────────────────────────────
+
 class VectorStore:
     """
-    ChromaDB-backed vector store for document chunks.
-    Provides semantic search with metadata filtering.
+    FAISS IndexFlatIP over L2-normalized embeddings (cosine similarity).
+    Persists the index + a JSON sidecar holding doc content/metadata.
     """
 
     def __init__(
@@ -27,138 +91,170 @@ class VectorStore:
         collection_name: str = "sustainability_chunks",
         persist_dir: Optional[str] = None,
     ):
-        self.persist_dir = persist_dir or settings.chroma_persist_dir
         self.collection_name = collection_name
+        self.persist_dir = Path(persist_dir or settings.faiss_persist_dir)
+        self.persist_dir.mkdir(parents=True, exist_ok=True)
 
-        Path(self.persist_dir).mkdir(parents=True, exist_ok=True)
+        self._index_path = self.persist_dir / f"{collection_name}.faiss"
+        self._docstore_path = self.persist_dir / f"{collection_name}.json"
+        self._lock = threading.Lock()
 
-        self._client = chromadb.PersistentClient(
-            path=self.persist_dir,
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
+        # Probe dimension from a tiny embedding
+        self._dim = self._probe_dim()
 
-        self._embedding_fn = self._create_embedding_function()
+        self._index: faiss.Index
+        self._docs: list[dict] = []          # position -> {"id", "content", "metadata"}
+        self._id_to_pos: dict[str, int] = {} # chunk_id -> position
 
-        self._collection = self._client.get_or_create_collection(
-            name=self.collection_name,
-            embedding_function=self._embedding_fn,
-            metadata={"hnsw:space": "cosine"},
-        )
+        self._load_or_init()
 
         logger.info(
-            "Vector store initialized — collection=%s, docs=%d",
-            self.collection_name,
-            self._collection.count(),
+            "Vector store ready — collection=%s, dim=%d, docs=%d, dir=%s",
+            collection_name, self._dim, len(self._docs), self.persist_dir,
         )
 
-    def _create_embedding_function(self):
-        """Create a ChromaDB-compatible embedding function using Ollama."""
-        from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
-        from utils.embeddings import embed_texts
+    # ── Persistence ───────────────────────────────────────────────────────
 
-        class OllamaEmbeddingFunction(EmbeddingFunction):
-            def __call__(self, input: Documents) -> Embeddings:
-                return embed_texts(list(input))
+    def _probe_dim(self) -> int:
+        vec = embed_text("dimension probe")
+        return len(vec)
 
-        return OllamaEmbeddingFunction()
+    def _new_index(self) -> faiss.Index:
+        return faiss.IndexFlatIP(self._dim)
+
+    def _load_or_init(self) -> None:
+        if self._index_path.exists() and self._docstore_path.exists():
+            try:
+                self._index = faiss.read_index(str(self._index_path))
+                with open(self._docstore_path, "r", encoding="utf-8") as f:
+                    docstore = json.load(f)
+                self._docs = docstore.get("docs", [])
+                self._id_to_pos = docstore.get("id_to_pos", {})
+                if self._index.ntotal != len(self._docs):
+                    logger.warning(
+                        "FAISS index / docstore size mismatch (%d vs %d) — rebuilding empty",
+                        self._index.ntotal, len(self._docs),
+                    )
+                    self._index = self._new_index()
+                    self._docs = []
+                    self._id_to_pos = {}
+                return
+            except Exception as e:
+                logger.warning("Failed to load existing FAISS state: %s — starting fresh", e)
+
+        self._index = self._new_index()
+        self._docs = []
+        self._id_to_pos = {}
+
+    def _persist(self) -> None:
+        faiss.write_index(self._index, str(self._index_path))
+        with open(self._docstore_path, "w", encoding="utf-8") as f:
+            json.dump({"docs": self._docs, "id_to_pos": self._id_to_pos}, f)
+
+    # ── Write ────────────────────────────────────────────────────────────
 
     def add_chunks(self, chunks: list[dict]) -> None:
         """
-        Add chunks to the vector store.
-
-        Each chunk dict should have:
-        - content: str
-        - chunk_id: str
-        - document_name: str
-        - page_number: int
-        - chunk_type: str (child, parent, table_repr, image_caption)
-        - parent_id: str
-        - raptor_level: int (optional)
+        Add chunks to the index. Each chunk dict needs:
+          content: str
+          chunk_id: str
+          document_name, page_number, chunk_type, parent_id, raptor_level (optional)
+        Chunks whose chunk_id is already present are skipped (FAISS flat indexes
+        don't support cheap in-place updates — use clear() to rebuild).
         """
         if not chunks:
             return
 
-        ids = []
-        documents = []
-        metadatas = []
+        new_records: list[dict] = []
+        new_texts: list[str] = []
+        skipped = 0
 
-        for chunk in chunks:
-            chunk_id = chunk.get("chunk_id", f"chunk_{len(ids)}")
+        with self._lock:
+            for chunk in chunks:
+                chunk_id = chunk.get("chunk_id") or f"chunk_{len(self._docs) + len(new_records)}"
+                if chunk_id in self._id_to_pos:
+                    skipped += 1
+                    continue
+                record = {
+                    "id": chunk_id,
+                    "content": chunk.get("content", ""),
+                    "metadata": {
+                        "document_name": chunk.get("document_name", ""),
+                        "page_number": chunk.get("page_number", 0),
+                        "chunk_type": chunk.get("chunk_type", "child"),
+                        "parent_id": chunk.get("parent_id", ""),
+                        "raptor_level": chunk.get("raptor_level", 0),
+                    },
+                }
+                new_records.append(record)
+                new_texts.append(record["content"])
 
-            # Avoid duplicates
-            if chunk_id in ids:
-                chunk_id = f"{chunk_id}_{len(ids)}"
+            if not new_records:
+                if skipped:
+                    logger.info("add_chunks: all %d chunks already indexed", skipped)
+                return
 
-            ids.append(chunk_id)
-            documents.append(chunk["content"])
-            metadatas.append({
-                "document_name": chunk.get("document_name", ""),
-                "page_number": chunk.get("page_number", 0),
-                "chunk_type": chunk.get("chunk_type", "child"),
-                "parent_id": chunk.get("parent_id", ""),
-                "raptor_level": chunk.get("raptor_level", 0),
-            })
+            # Embed in batches to keep Ollama happy
+            batch = 64
+            all_vecs: list[list[float]] = []
+            for i in range(0, len(new_texts), batch):
+                all_vecs.extend(embed_texts(new_texts[i:i + batch]))
 
-        # Add in batches (ChromaDB has limits)
-        batch_size = 100
-        for i in range(0, len(ids), batch_size):
-            end = min(i + batch_size, len(ids))
-            self._collection.upsert(
-                ids=ids[i:end],
-                documents=documents[i:end],
-                metadatas=metadatas[i:end],
-            )
+            arr = np.asarray(all_vecs, dtype=np.float32)
+            faiss.normalize_L2(arr)  # cosine similarity via inner product
 
-        logger.info("Added %d chunks to vector store", len(ids))
+            self._index.add(arr)
+
+            start = len(self._docs)
+            for offset, record in enumerate(new_records):
+                self._docs.append(record)
+                self._id_to_pos[record["id"]] = start + offset
+
+            self._persist()
+
+        logger.info(
+            "Indexed %d new chunks (skipped %d already-present) — total=%d",
+            len(new_records), skipped, len(self._docs),
+        )
+
+    # ── Read ─────────────────────────────────────────────────────────────
 
     def search(
         self,
         query: str,
         top_k: int = 20,
         where: Optional[dict] = None,
-        where_document: Optional[dict] = None,
+        where_document: Optional[dict] = None,  # accepted for API parity, ignored
     ) -> list[dict]:
-        """
-        Semantic search for relevant chunks.
-
-        Args:
-            query: Search query
-            top_k: Number of results to return
-            where: Metadata filter (e.g., {"chunk_type": "child"})
-            where_document: Document content filter
-
-        Returns:
-            List of dicts with content, metadata, score, and id
-        """
-        kwargs = {
-            "query_texts": [query],
-            "n_results": min(top_k, self._collection.count() or 1),
-        }
-
-        if where:
-            kwargs["where"] = where
-        if where_document:
-            kwargs["where_document"] = where_document
-
-        try:
-            results = self._collection.query(**kwargs)
-        except Exception as e:
-            logger.error("Vector search failed: %s", e)
+        if self._index.ntotal == 0:
             return []
 
-        # Format results
-        formatted = []
-        if results and results["documents"]:
-            for i, doc in enumerate(results["documents"][0]):
-                formatted.append({
-                    "content": doc,
-                    "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                    "score": 1 - (results["distances"][0][i] if results["distances"] else 0),
-                    "id": results["ids"][0][i] if results["ids"] else "",
-                })
+        # Over-fetch when filtering since we apply the predicate post-hoc
+        fetch_k = top_k * 5 if where else top_k
+        fetch_k = min(fetch_k, self._index.ntotal)
 
-        logger.debug("Vector search — query='%s...', results=%d", query[:50], len(formatted))
-        return formatted
+        qvec = np.asarray([embed_text(query)], dtype=np.float32)
+        faiss.normalize_L2(qvec)
+        scores, indices = self._index.search(qvec, fetch_k)
+
+        results = []
+        for pos, score in zip(indices[0].tolist(), scores[0].tolist()):
+            if pos < 0 or pos >= len(self._docs):
+                continue
+            doc = self._docs[pos]
+            if where and not _matches(doc["metadata"], where):
+                continue
+            results.append({
+                "id": doc["id"],
+                "content": doc["content"],
+                "metadata": doc["metadata"],
+                "score": float(score),
+            })
+            if len(results) >= top_k:
+                break
+
+        logger.debug("Vector search — query='%s...', results=%d", query[:50], len(results))
+        return results
 
     def search_by_raptor_level(
         self,
@@ -167,75 +263,53 @@ class VectorStore:
         max_level: int = 3,
         top_k: int = 10,
     ) -> list[dict]:
-        """Search only RAPTOR nodes at specific tree levels."""
         return self.search(
             query=query,
             top_k=top_k,
-            where={
-                "$and": [
-                    {"raptor_level": {"$gte": min_level}},
-                    {"raptor_level": {"$lte": max_level}},
-                ]
-            },
+            where={"$and": [
+                {"raptor_level": {"$gte": min_level}},
+                {"raptor_level": {"$lte": max_level}},
+            ]},
         )
 
     def get_parent_chunk(self, parent_id: str) -> Optional[dict]:
-        """Retrieve the parent chunk for context expansion."""
-        try:
-            results = self._collection.get(
-                where={"parent_id": parent_id, "chunk_type": "parent"},
-                limit=1,
-            )
-            if results and results["documents"]:
+        for doc in self._docs:
+            meta = doc["metadata"]
+            if meta.get("parent_id") == parent_id and meta.get("chunk_type") == "parent":
                 return {
-                    "content": results["documents"][0],
-                    "metadata": results["metadatas"][0] if results["metadatas"] else {},
-                    "id": results["ids"][0] if results["ids"] else "",
+                    "id": doc["id"],
+                    "content": doc["content"],
+                    "metadata": meta,
                 }
-        except Exception:
-            pass
         return None
 
     def get_all_documents(self) -> list[dict]:
-        """Get all documents in the collection (for BM25 indexing)."""
-        count = self._collection.count()
-        if count == 0:
-            return []
+        """Return all non-parent docs (for BM25 indexing)."""
+        return [
+            {"id": d["id"], "content": d["content"], "metadata": d["metadata"]}
+            for d in self._docs
+            if d["metadata"].get("chunk_type") != "parent"
+        ]
 
-        results = self._collection.get(
-            limit=count,
-            where={"chunk_type": {"$ne": "parent"}},  # Exclude parent chunks
-        )
-
-        docs = []
-        if results and results["documents"]:
-            for i, doc in enumerate(results["documents"]):
-                docs.append({
-                    "content": doc,
-                    "id": results["ids"][i],
-                    "metadata": results["metadatas"][i] if results["metadatas"] else {},
-                })
-
-        return docs
+    # ── Admin ────────────────────────────────────────────────────────────
 
     def clear(self) -> None:
-        """Delete all documents from the collection."""
-        try:
-            self._client.delete_collection(self.collection_name)
-            self._collection = self._client.get_or_create_collection(
-                name=self.collection_name,
-                embedding_function=self._embedding_fn,
-                metadata={"hnsw:space": "cosine"},
-            )
-            logger.info("Vector store cleared")
-        except Exception as e:
-            logger.error("Failed to clear vector store: %s", e)
+        with self._lock:
+            self._index = self._new_index()
+            self._docs = []
+            self._id_to_pos = {}
+            # Remove on-disk artifacts
+            for p in (self._index_path, self._docstore_path):
+                try:
+                    p.unlink()
+                except FileNotFoundError:
+                    pass
+        logger.info("Vector store cleared")
 
     @property
     def count(self) -> int:
-        """Number of documents in the collection."""
-        return self._collection.count()
+        return len(self._docs)
 
 
-# Singleton instance
+# Singleton
 vector_store = VectorStore()
