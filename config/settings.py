@@ -25,10 +25,10 @@ class Settings(BaseSettings):
 
     # ── Ollama ──
     ollama_base_url: str = Field(default="http://localhost:11434")
-    ollama_model_light: str = Field(default="deepseek-v3.1:671b-cloud")
-    ollama_model_heavy: str = Field(default="deepseek-v3.1:671b-cloud")
-    ollama_model_vision: str = Field(default="llava")
-    ollama_model_embed: str = Field(default="nomic-embed-text")
+    ollama_model_light: str = Field(default="gpt-oss:12b-cloud")
+    ollama_model_heavy: str = Field(default="gpt-oss:12b-cloud")
+    ollama_model_vision: str = Field(default="gpt-oss:12b-cloud")
+    ollama_model_embed: str = Field(default="mxbai-embed-large")
 
     # ── Storage Paths ──
     faiss_persist_dir: str = Field(default="./data/faiss")
