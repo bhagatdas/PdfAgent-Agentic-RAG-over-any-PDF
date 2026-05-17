@@ -44,6 +44,16 @@ Examples:
     # Schema command
     subparsers.add_parser("schema", help="Show database schema catalog")
 
+    # Retrieval evaluation commands
+    gold_parser = subparsers.add_parser("eval-build-gold", help="Build a gold retrieval dataset via LLM synthesis")
+    gold_parser.add_argument("--n", type=int, default=50, help="Number of chunks to sample (default: 50)")
+    gold_parser.add_argument("--out", default="evaluation/gold_retrieval.jsonl", help="Output JSONL path")
+
+    eval_parser = subparsers.add_parser("eval-retrieval", help="Score retrieval (dense / hybrid / hybrid+rerank)")
+    eval_parser.add_argument("--gold", default="evaluation/gold_retrieval.jsonl", help="Gold dataset path")
+    eval_parser.add_argument("--out", default="evaluation/retrieval_eval_results.json", help="Results JSON path")
+    eval_parser.add_argument("--k", type=int, nargs="+", default=[1, 3, 5, 10], help="k cutoffs")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -60,6 +70,10 @@ Examples:
         _run_chat()
     elif args.command == "schema":
         _run_schema()
+    elif args.command == "eval-build-gold":
+        _run_eval_build_gold(args)
+    elif args.command == "eval-retrieval":
+        _run_eval_retrieval(args)
 
 
 def _run_ingest(args):
@@ -147,6 +161,27 @@ def _print_result(result: dict):
 def _run_schema():
     from storage.schema_manager import schema_manager
     print(schema_manager.generate_catalog())
+
+
+def _run_eval_build_gold(args):
+    from pathlib import Path
+    from evaluation.build_gold_dataset import build_gold_dataset
+
+    summary = build_gold_dataset(n=args.n, out_path=Path(args.out))
+    print("\n=== GOLD DATASET BUILD ===")
+    for k, v in summary.items():
+        print(f"  {k}: {v}")
+
+
+def _run_eval_retrieval(args):
+    from pathlib import Path
+    from evaluation.retrieval_eval import evaluate_retrieval
+
+    evaluate_retrieval(
+        gold_path=Path(args.gold),
+        ks=args.k,
+        out_path=Path(args.out),
+    )
 
 
 if __name__ == "__main__":
