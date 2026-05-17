@@ -49,8 +49,15 @@ The planner decides **per query**:
 pip install -r requirements.txt
 
 # 2. Configure environment
-cp .env.example .env
-# edit .env -- set LANGCHAIN_API_KEY and confirm Ollama model names
+# Create a .env file in the project root. Minimal keys:
+#   OLLAMA_BASE_URL=http://localhost:11434
+#   OLLAMA_MODEL_LIGHT=<your light model>
+#   OLLAMA_MODEL_HEAVY=<your heavy model>
+#   OLLAMA_MODEL_VISION=llava
+#   OLLAMA_MODEL_EMBED=nomic-embed-text
+#   LANGCHAIN_TRACING_V2=true
+#   LANGCHAIN_API_KEY=<your LangSmith key>
+# See config/settings.py for the full list of supported keys + defaults.
 
 # 3. Start Ollama (separate terminal) and pull the models referenced in .env
 ollama serve
@@ -120,7 +127,7 @@ Query -> Understanding -> Memory Read -> Planner
                                                         +-- retry retrieval / reasoning (<=2x)
 ```
 
-Full design, agent-by-agent breakdown, and end-to-end query traces: **[PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md)**
+For deeper dives, read the agents and routers directly: [agents/](agents/), [graph/workflow.py](graph/workflow.py), [graph/state.py](graph/state.py).
 
 ---
 
@@ -187,7 +194,7 @@ agentic_rag/
 
 ## Configuration
 
-All settings via `.env` (see [.env.example](.env.example)):
+All settings via `.env` (full list with defaults in [config/settings.py](config/settings.py)):
 
 | Group       | Keys |
 |---|---|
@@ -223,9 +230,9 @@ All settings via `.env` (see [.env.example](.env.example)):
 
 ## Documentation
 
-- **[PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md)** — full architecture & agent details
 - **[workflow.png](workflow.png)** — rendered LangGraph state diagram
 - **[workflow.mmd](workflow.mmd)** — editable Mermaid source
+- Agent implementations live in [agents/](agents/); routing logic in [graph/workflow.py](graph/workflow.py).
 
 ---
 
