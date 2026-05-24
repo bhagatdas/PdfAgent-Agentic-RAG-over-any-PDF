@@ -67,25 +67,34 @@ Between retrieval/table_agent and reasoning, an **entity-metric extractor** pull
 
 ## Quick Start
 
-Four steps from a fresh clone to chatting with a PDF — no preprocessing CLI required.
+Three steps from `pip install` to chatting with a PDF — no clone, no preprocessing CLI required.
 
 ```bash
-# 1. Install
-pip install -r requirements.txt
+# 1. Install (from GitHub — no PyPI publish yet)
+pip install git+https://github.com/bhagatdas/PdfAgent-Agentic-RAG-over-any-PDF.git
 
 # 2. Install + start Ollama (https://ollama.com/download), then pull models
 ollama pull mxbai-embed-large
 ollama signin                       # only if using cloud models like gpt-oss:120b-cloud
 
-# 3. (Optional) override defaults in .env — see config/settings.py for the full list
-# OLLAMA_MODEL_LIGHT / _HEAVY / _VISION default to gpt-oss:120b-cloud
-# OLLAMA_MODEL_EMBED defaults to mxbai-embed-large
-
-# 4. Run the app
-uvicorn app:app --reload --port 8000
+# 3. Launch the UI (creates a data/ folder in the current working directory)
+pdfagent
 ```
 
 Open **http://localhost:8000** → click **Upload PDF** → drop a file → wait for the live progress to finish → ask questions. No CLI ingestion step needed.
+
+`pdfagent --host 0.0.0.0 --port 8080 --reload` for custom bind / dev auto-reload. The full LangGraph CLI is also installed as `pdfagent-cli` (`pdfagent-cli ingest`, `pdfagent-cli query "..."`, `pdfagent-cli chat`, `pdfagent-cli schema`).
+
+### Optional — clone for development
+
+```bash
+git clone https://github.com/bhagatdas/PdfAgent-Agentic-RAG-over-any-PDF.git
+cd PdfAgent-Agentic-RAG-over-any-PDF
+pip install -e .                    # editable install
+pdfagent --reload                   # or: uvicorn app:app --reload --port 8000
+```
+
+Override defaults via a `.env` file in your working directory — see [config/settings.py](config/settings.py) for the full list (`OLLAMA_MODEL_LIGHT` / `_HEAVY` / `_VISION` default to `gpt-oss:120b-cloud`; `OLLAMA_MODEL_EMBED` defaults to `mxbai-embed-large`).
 
 ---
 

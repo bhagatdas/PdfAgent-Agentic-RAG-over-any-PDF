@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdfagent"
+version = "0.1.0"
+description = "Agentic RAG over any PDF — grounded, cited answers via LangGraph + Ollama + FAISS"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Bhagat Das", email = "bhagatkumar75@gmail.com" }]
+license = { text = "Proprietary" }
+keywords = ["rag", "agentic-rag", "langgraph", "ollama", "faiss", "pdf", "llm"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/bhagatdas/PdfAgent-Agentic-RAG-over-any-PDF"
+Repository = "https://github.com/bhagatdas/PdfAgent-Agentic-RAG-over-any-PDF"
+Issues = "https://github.com/bhagatdas/PdfAgent-Agentic-RAG-over-any-PDF/issues"
+
+[project.scripts]
+pdfagent = "pdfagent_cli:main"
+pdfagent-cli = "main:main"
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools]
+packages = [
+    "agents",
+    "config",
+    "graph",
+    "retrieval",
+    "storage",
+    "utils",
+    "evaluation",
+    "static",
+]
+py-modules = [
+    "app",
+    "main",
+    "preprocessing",
+    "wipe_data",
+    "inspect_tables",
+    "reextract_tables",
+    "generate_workflow_png",
+    "pdfagent_cli",
+]
+include-package-data = true
+
+[tool.setuptools.package-data]
+static = ["*", "**/*"]
