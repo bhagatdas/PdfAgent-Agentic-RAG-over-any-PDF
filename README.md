@@ -27,12 +27,12 @@ ollama pull mxbai-embed-large
 ollama signin                       # only if using cloud models (e.g. gpt-oss:120b-cloud)
 
 # 3. Launch the UI
-pdfagent
+agentic-rag-pdf
 ```
 
 Open **http://localhost:8000** → click **Upload PDF** → drop a file → ask questions.
 
-> The PyPI distribution name is `agentic-rag-pdf` (the bare `pdfagent` name is owned by an unrelated project). The console command is `pdfagent`.
+> The same command is also installed under the shorter alias `pdfagent` if you prefer less typing. Both are identical.
 
 ---
 
@@ -63,23 +63,25 @@ pip install git+https://github.com/bhagatdas/PdfAgent-Agentic-RAG-over-any-PDF.g
 git clone https://github.com/bhagatdas/PdfAgent-Agentic-RAG-over-any-PDF.git
 cd PdfAgent-Agentic-RAG-over-any-PDF
 pip install -e .
-pdfagent --reload
+agentic-rag-pdf --reload
 ```
 
 ---
 
 ## Command-line usage
 
-The wheel installs two console scripts:
+The wheel installs two pairs of console scripts — long-form names that match the PyPI distribution, plus short aliases that mean the same thing:
 
 ```bash
-pdfagent                              # launch the browser UI (uvicorn on :8000)
-pdfagent --host 0.0.0.0 --port 8080   # custom bind
+agentic-rag-pdf                              # launch the browser UI (uvicorn on :8000)
+agentic-rag-pdf --host 0.0.0.0 --port 8080   # custom bind
+pdfagent                                     # same thing, shorter alias
 
-pdfagent-cli ingest                   # CLI ingest (drop files in data/pdfs/ first)
-pdfagent-cli query "..."              # one-shot question
-pdfagent-cli chat                     # interactive REPL
-pdfagent-cli schema                   # print the table schema catalog
+agentic-rag-pdf-cli ingest                   # CLI ingest (drop files in data/pdfs/ first)
+agentic-rag-pdf-cli query "..."              # one-shot question
+agentic-rag-pdf-cli chat                     # interactive REPL
+agentic-rag-pdf-cli schema                   # print the table schema catalog
+pdfagent-cli ...                             # short alias for the same CLI
 ```
 
 Override defaults via a `.env` file in your working directory. The full settings reference lives in [config/settings.py](config/settings.py).

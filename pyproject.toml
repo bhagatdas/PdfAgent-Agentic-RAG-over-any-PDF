@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-rag-pdf"
-version = "0.1.3"
+version = "0.1.4"
 description = "Agentic RAG over any PDF — grounded, cited answers from research reports, ESG/sustainability disclosures, contracts, manuals, and filings. Multi-agent LangGraph workflow with hybrid retrieval, RAPTOR summaries, NL→SQL over extracted tables, CRAG corrective loops, and a defense-in-depth hallucination stack."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -76,7 +76,13 @@ Documentation = "https://github.com/bhagatdas/PdfAgent-Agentic-RAG-over-any-PDF#
 "Source Code" = "https://github.com/bhagatdas/PdfAgent-Agentic-RAG-over-any-PDF"
 
 [project.scripts]
+# Primary command (matches the PyPI distribution name so `pip install
+# agentic-rag-pdf` + `agentic-rag-pdf` is a clean pair). `pdfagent` is
+# kept as a short alias for power users.
+agentic-rag-pdf = "pdfagent_cli:main"
 pdfagent = "pdfagent_cli:main"
+# Full LangGraph CLI (ingest / query / chat / schema)
+agentic-rag-pdf-cli = "main:main"
 pdfagent-cli = "main:main"
 
 [tool.setuptools.dynamic]
