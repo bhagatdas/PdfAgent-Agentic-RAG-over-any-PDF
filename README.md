@@ -1,6 +1,6 @@
-# Agentic RAG System for ESG (Environmental, Social, and Governance) Data
+# PdfAgent — Agentic RAG over any PDF
 
-> **ESG Insight Pro** — a multi-agent Retrieval-Augmented Generation system that answers questions about ESG / Sustainability PDF reports with grounded, cited responses.
+> Grounded answers from your PDFs, with source citations.
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.4+-1c3d5a.svg)](https://langchain-ai.github.io/langgraph/)
@@ -9,6 +9,8 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-000000.svg)](https://ollama.com/)
 [![License](https://img.shields.io/badge/license-Proprietary-lightgrey.svg)](#license)
+
+PdfAgent is a multi-agent Retrieval-Augmented Generation system that answers questions about any PDF — research reports, ESG / sustainability disclosures, contracts, manuals, financial filings — with grounded, cited responses. Drop a PDF into the browser UI and start asking.
 
 Built on **LangGraph**, **Ollama**, and **FAISS**. Ingests PDFs (text + tables + images), builds a hierarchical retrieval index, and answers questions through a multi-agent workflow with corrective feedback loops (CRAG) and a defense-in-depth hallucination stack (pre-synthesis structured fact extraction + deterministic entity↔value attribution verification + citation verification + claim-level faithfulness + cross-chunk contradiction detection + deterministic arithmetic verification).
 
