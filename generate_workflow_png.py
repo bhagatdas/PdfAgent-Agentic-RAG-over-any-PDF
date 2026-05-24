@@ -44,7 +44,10 @@ def _build_topology_only():
         return "direct_reasoning"
 
     def _post_retrieval_router(state):
-        return "table_agent" if state.get("use_table_agent", False) else "reasoning"
+        # Both branches converge on entity_metric_extractor before reasoning —
+        # the pre-synthesis fact-extraction node added for grounded numerical
+        # attribution. Keep in sync with graph/workflow.py.
+        return "table_agent" if state.get("use_table_agent", False) else "entity_metric_extractor"
 
     def _validation_router(state):
         verdict = state.get("validation_verdict", "pass")
@@ -60,8 +63,9 @@ def _build_topology_only():
     b = StateGraph(_State)
     for n in [
         "query_understanding", "memory_read", "planner",
-        "retrieval", "table_agent", "reasoning",
-        "validation", "memory_save",
+        "retrieval", "table_agent",
+        "entity_metric_extractor",
+        "reasoning", "validation", "memory_save",
     ]:
         b.add_node(n, _noop)
 
@@ -77,12 +81,17 @@ def _build_topology_only():
     })
     b.add_conditional_edges("retrieval", _post_retrieval_router, {
         "table_agent": "table_agent",
-        "reasoning": "reasoning",
+        "entity_metric_extractor": "entity_metric_extractor",
     })
-    b.add_edge("table_agent", "reasoning")
+    # Table agent → extractor → reasoning. The extractor runs before reasoning
+    # so the prompt has a pre-extracted (entity, metric, value) facts table.
+    b.add_edge("table_agent", "entity_metric_extractor")
+    b.add_edge("entity_metric_extractor", "reasoning")
     b.add_edge("reasoning", "validation")
     b.add_conditional_edges("validation", _validation_router, {
         "memory_save": "memory_save",
+        # CRAG retry skips the extractor — facts persist in state from the
+        # first pass, so re-extracting would waste an LLM call.
         "retry_reasoning": "reasoning",
         "retry_retrieval": "retrieval",
     })

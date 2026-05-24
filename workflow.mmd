@@ -10,11 +10,13 @@ graph TD;
 	planner(planner)
 	retrieval(retrieval)
 	table_agent(table_agent)
+	entity_metric_extractor(entity_metric_extractor)
 	reasoning(reasoning)
 	validation(validation)
 	memory_save(memory_save)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> query_understanding;
+	entity_metric_extractor --> reasoning;
 	memory_read --> planner;
 	planner -. &nbsp;end_early&nbsp; .-> __end__;
 	planner -. &nbsp;direct_reasoning&nbsp; .-> reasoning;
@@ -22,9 +24,9 @@ graph TD;
 	planner -. &nbsp;table_only&nbsp; .-> table_agent;
 	query_understanding --> memory_read;
 	reasoning --> validation;
-	retrieval -.-> reasoning;
+	retrieval -.-> entity_metric_extractor;
 	retrieval -.-> table_agent;
-	table_agent --> reasoning;
+	table_agent --> entity_metric_extractor;
 	validation -.-> memory_save;
 	validation -. &nbsp;retry_reasoning&nbsp; .-> reasoning;
 	validation -. &nbsp;retry_retrieval&nbsp; .-> retrieval;
